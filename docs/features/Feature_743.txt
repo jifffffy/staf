@@ -1,0 +1,751 @@
+Feature ID  : 743
+Title       : Provide Linux ppc64le support
+
+Description
+-----------
+
+Provide the ability to support STAF on Linux PowerPC 64-bit Little Endian
+(LE) systems, including providing STAF installation files.
+
+Problem(s) Solved
+-----------------
+
+Currently, have to build STAF manually on Linux PowerP uCsing the makefile
+for linuxppc64 (Big Endian) with some updates.  Provide a makefile for
+linuxppc64le and provide STAF installer files (InstallAnywhere and tar.gz
+for STAFInst) that can be downloaded via the STAF SourceForge web site.
+
+How to Build STAF on a Linux ppc64le System
+-------------------------------------------
+
+1) Put the STAF source in a directory, e.g. /opt/dev/autobuild/build/src/staf:
+
+    mkdir /opt/dev/autobuild/build
+    cd /opt/dev/autobuild/build
+    
+    *** Download the latest STAF source tar file (must be
+        STAF V3.4.21 or later), e.g. STAF3421-src.tar.gz
+        in /opt/dev/autobuild/build (or where ever you want
+        to put it). ***
+    
+    tar xfz STAF3421-src.tar.gz
+
+2) Build STAF as follows:
+
+Note:  As a pre-requisite to build STAF, you must have  g++, a C++ compiler
+installed.  On Ubuntu Linux, you can install gcc by typing:
+
+    apt-get install g++
+
+a) Build STAF Core (staf and connprov*):
+
+Note:  I haven't been able to build OpenSSL for Linux PPC64le
+yet so there's no STAF support for the SSL interface yet. 
+
+    export OS_NAME=linux-ppc64le
+    export BUILD_TYPE=retail
+    export STAF_USE_SSL=
+    cd /opt/dev/autobuild/build/src/staf
+    make PROJECTS="staf connprov*"
+
+b) Build the 'zip' component:
+
+Get zlib-1.2.5.tar (as talked about in the STAF Developer's Guide) and put
+it in /opt/dev/autobuild/build/tools, or wherever you want to put it.
+
+    cd /opt/dev/autobuild
+    mkdir tools
+    cd tools
+    tar xf zlib-1.2.5.tar
+
+    export ZLIB_SOURCEDIR=/opt/dev/autobuild/tools/zlib-1.2.5
+    cd /opt/dev/autobuild/build/src/staf
+    make PROJECTS=zip
+
+c) Build STAF Java Support ('java'):  You must have a Java SDK for
+Linux PPC64 LE installed to build STAF Java Support.  If you're an IBMer,
+the latest IBM Java for Linux/PPC64 (LE), V7.2, can be downloaded from the
+IBM Java Information Manager (JIM) web site at
+http://w3.hursley.ibm.com/java/jim/ibmsdks/latest/index.html.
+I downloaded file ibm-java-sdk-7.1-2.10-lnux-ppc64le.tgz and untarred it into
+/opt/ibm-java-ppc64le-71 before building STAF Java Support.
+
+    export JAVA_V12_ROOT=/opt/ibm-java-ppc64le-71
+    cd /opt/dev/autobuild/build/src/staf
+    make PROJECTS=java
+
+d) Build STAF Ant Support ('ant') -- after building 'java':
+
+Get apache-ant-1.6.2-bin.tar.gz (as talked about in the STAF Developer's Guide)
+and put it in /opt/dev/autobuild/tools, or wherever you want to put it.
+
+    cd /opt/dev/autobuild/tools
+    tar xfz apache-ant-1.6.2-bin.tar.gz
+
+    export ANT_ROOT=/opt/dev/autobuild/tools/apache-ant-1.6.2
+    cd /opt/dev/autobuild/build/src/staf
+    make PROJECTS=ant
+
+e) Build the STAF Demo ('demo') -- after building 'java':
+
+    cd /opt/dev/autobuild/build/src/staf
+    make PROJECTS=demo
+
+f) Package the build:
+
+    cd /opt/dev/atuobuild/build/src/staf
+    make PROJECTS=pkg
+
+
+Internal Changes
+----------------
+
+New Files:
+
+    build/makefile.linux-ppc64le
+    package/makefile.pkg.linux-ppc64le  (Copied makefile.pkg.linux-ppc64-64 and removed python files)
+    install/ia/ant/linux-ppc64le/build.xml
+    install/ia/ant/linux-ppc64le/iabuild.xml
+
+Changed Files:
+
+    autobuild/BuildSTAF.xml
+    autobuild/BuildIA.xml
+    build/makefile.gcc
+    docs/userguide/Overview.script
+    docs/userguide/Config.script
+    docs/faq/STAFFAQ.xml
+    docs/installguide/STAFInstall.xml
+    docs/developerguide/stafdg.html
+    test/STAFTest.xml
+    webpages/sf/latest.xml
+    webpages/sf/getcurrent.php
+
+a) Contents of new file: build/makefile.linux-ppc64le
+
+    #############################################################################
+    # Software Testing Automation Framework (STAF)                              #
+    # (C) Copyright IBM Corp. 2001                                              #
+    #                                                                           #
+    # This software is licensed under the Eclipse Public License (EPL) V1.0.    #
+    #############################################################################
+    
+    # Setup system variables
+    
+    FS := /
+    PS := :
+    OS_TYPE = unix
+    OS_LIBS = pthread crypt dl rt
+    
+    # Setup tool names
+    
+    STRIP := strip
+    
+    # Setup compiler variables
+    
+    ifeq ($(CC_NAME),)
+        CC_NAME := gcc
+    endif
+    
+    OS_COMMONFLAGS := -D_XOPEN_SOURCE -D_BSD_SOURCE -DSTAF_OS_NAME_LINUX \
+                      -DSTAF_GETHOSTBYNAME_R_6PARM -DSTAF_GETHOSTBYADDR_R_8PARM \
+                      -mpowerpc64 -m64
+    
+    # Provide the default location for Java files on this system
+    
+    JAVA_DEFAULT_VERSION ?= V12
+
+    JAVA_BUILD_V12 ?= 1
+    JAVA_V12_ROOT ?= /opt/ibm-java-ppc64le-71
+    JAVA_V12_INCLUDE_OS_NAME ?= linux
+    
+    # Provide the default location for zlib files on this system
+    
+    ZLIB_SOURCEDIR ?= /opt/dev/autobuild/tools/zlib-1.2.5
+    
+    # Provide the default location for Ant on this system
+    
+    ANT_ROOT ?= /opt/dev/autobuild/tools/apache-ant-1.6.2
+
+b) Changes to build/makefile.gcc:
+
+Added a check to see if the operating system is Linux PPC64 LE and
+if the gcc version is >= 4.6 and if so, it changes the link order
+(by moving the $(OBJS) before the $(ALL_LIB_LIST) to prevent a
+"java.lang.UnsatisfiedLinkError: JSTAFSH" error due to undefined
+symbols when using STAF Java Support.
+
+    Index: makefile.gcc
+    ===================================================================
+    RCS file: /cvsroot/staf/src/staf/build/makefile.gcc,v
+    retrieving revision 1.20
+    diff -r1.20 makefile.gcc
+    29a30,38
+    > # Check if the operating system is Linux PPC64 Little Endian (LE) and if so,
+    > # set LINK_OBJS_FIRST = 1 if the gcc version is >= 4.6
+    > 
+    > ifeq ($(OS_NAME),linux-ppc64-64)
+    >     LINK_OBJS_FIRST := $(shell echo `gcc -dumpversion | cut -f1-2 -d.` \>= 4.6 | sed -e 's/\./*100+/g' | bc)
+    > else
+    >     LINK_OBJS_FIRST := 0
+    > endif
+    > 
+    90,91c99,109
+    <                    $(ALL_INCLUDEDIR_LIST) $(ALL_LIBDIR_LIST) $(ALL_LIB_LIST) \
+    <                    $(OBJS)
+    ---
+    >                    $(ALL_INCLUDEDIR_LIST) $(ALL_LIBDIR_LIST)
+    > 
+    > # On Linux PPC64 LE, when the gcc version >= 4.6, we need to change the link
+    > # order to prevent "java.lang.UnsatisfiedLinkError: JSTAFSH" due to undefined
+    > # symbols when using STAF Java Support (see Bug #1518 and Feature #743).
+    > # Note:  This causes an issue linking STAF Python support so it needs to be
+    > #        investigated further to see if there's a way to fix that as well.
+    > 
+    > ifeq ($(LINK_OBJS_FIRST),1)
+    >     CC_SHARED_LIB_IT += $(OBJS) $(ALL_LIB_LIST)
+    > else
+    >     CC_SHARED_LIB_IT += $(ALL_LIB_LIST) $(OBJS)
+    > endif
+
+c) Contents of new file: package/makefile.pkg.linux-ppc64le  (Copied makefile.pkg.linux-ppc64-64 anmd removed python files)
+
+    #############################################################################
+    # Software Testing Automation Framework (STAF)                              #
+    # (C) Copyright IBM Corp. 2001                                              #
+    #                                                                           #
+    # This software is licensed under the Eclipse Public License (EPL) V1.0.    #
+    #############################################################################
+    
+    Pkg_Targets += \
+      $(PKG)/LICENSE.htm \
+      $(PKG)/NOTICES.htm \
+      $(PKG)/install.properties \
+      $(PKG)/STAFInst \
+      $(PKG)/STAFInst.mfs \
+      $(PKG)/bin/STAFProc$(OS_EE) \
+      $(PKG)/bin/STAF$(OS_EE) \
+      $(PKG)/bin/STAFReg$(OS_EE) \
+      $(PKG)/bin/STAFLoop$(OS_EE) \
+      $(PKG)/bin/STAFExecProxy$(OS_EE) \
+      $(PKG)/lib/JSTAF.zip \
+      $(PKG)/lib/JSTAF.jar \
+      $(PKG)/lib/STAFAnt.jar \
+      $(PKG)/lib/STAFHTTPSLS.jar \
+      $(PKG)/bin/STAF.cfg \
+      $(PKG)/bin/FmtLog$(OS_EE) \
+      $(PKG)/lib/libSTAF.so \
+      $(PKG)/lib/libSTAFLIPC.so \
+      $(PKG)/lib/libSTAFTCP.so \
+      $(PKG)/lib/libJSTAF.so \
+      $(PKG)/lib/libJSTAFSH.so \
+      $(PKG)/lib/libSTAFDSLS.so \
+      $(PKG)/lib/libSTAFMon.so \
+      $(PKG)/lib/libSTAFLog.so \
+      $(PKG)/lib/libSTAFPool.so \
+      $(PKG)/lib/libSTAFZip.so \
+      $(PKG)/lib/libSTAFZlib.so \
+      $(PKG)/lib/libSTAFEXECPROXY.so \
+      $(PKG)/lib/IPv4/libSTAF.so \
+      $(PKG)/lib/IPv4/libSTAFTCP.so \
+      $(PKG)/lib/IPv6/libSTAF.so \
+      $(PKG)/lib/IPv6/libSTAFTCP.so \
+      $(PKG)/docs/History \
+      $(PKG)/docs/STAFCMDS.htm \
+      $(PKG)/docs/STAFFAQ.htm \
+      $(PKG)/docs/STAFGS.pdf \
+      $(PKG)/docs/STAFInstall.pdf \
+      $(PKG)/docs/STAFRC.htm \
+      $(PKG)/docs/STAFUG.htm \
+      $(PKG)/docs/STAFHome.htm \
+      $(PKG)/docs/STAFDiag.htm \
+      $(PKG)/include/STAF.h \
+      $(PKG)/include/STAFInlImpl.cpp \
+      $(PKG)/include/STAFCommandParser.h \
+      $(PKG)/include/STAFCommandParserInlImpl.cpp \
+      $(PKG)/include/STAFDataTypes.h \
+      $(PKG)/include/STAFDataTypesInlImpl.cpp \
+      $(PKG)/include/STAFDynamicLibrary.h \
+      $(PKG)/include/STAFDynamicLibraryInlImpl.cpp \
+      $(PKG)/include/STAFError.h \
+      $(PKG)/include/STAFFileSystem.h \
+      $(PKG)/include/STAFFileSystemInlImpl.cpp \
+      $(PKG)/include/STAFEventSem.h \
+      $(PKG)/include/STAFEventSemInlImpl.cpp \
+      $(PKG)/include/STAFException.h \
+      $(PKG)/include/STAFLogService.h \
+      $(PKG)/include/STAFMonitorService.h \
+      $(PKG)/include/STAFMutexSem.h \
+      $(PKG)/include/STAFMutexSemInlImpl.cpp \
+      $(PKG)/include/STAFOSTypes.h \
+      $(PKG)/include/STAFRefPtr.h \
+      $(PKG)/include/STAFResPoolService.h \
+      $(PKG)/include/STAFServiceInterface.h \
+      $(PKG)/include/STAFString.h \
+      $(PKG)/include/STAFStringInlImpl.cpp \
+      $(PKG)/include/STAFThread.h \
+      $(PKG)/include/STAFTimestamp.h \
+      $(PKG)/include/STAFTimestampInlImpl.cpp \
+      $(PKG)/include/STAFUtil.h \
+      $(PKG)/include/STAF_fstream.h \
+      $(PKG)/include/STAF_iostream.h \
+      $(PKG)/include/STAFProcess.h \
+      $(PKG)/include/STAFProcessInlImpl.cpp \
+      $(PKG)/include/STAFTrace.h \
+      $(PKG)/include/STAFTraceInlImpl.cpp \
+      $(PKG)/samples/c/LogIt.c \
+      $(PKG)/samples/cpp/LogIt.cpp \
+      $(PKG)/samples/demo/STAFDemoController.java \
+      $(PKG)/samples/demo/STAFProcess.java \
+      $(PKG)/samples/demo/STAFDemo.jar \
+      $(PKG)/samples/java/JPing.java \
+      $(PKG)/samples/misc/OldVars.cfg \
+      $(PKG)/codepage/alias.txt \
+      $(subst $(SRC),$(PKG),$(subst ucm,bin,$(shell find $(SRC) -name "*.ucm")))
+    
+    ifdef STAF_USE_SSL
+    Pkg_Targets += \
+      $(PKG)/lib/libssl.so.0.9.8 \
+      $(PKG)/lib/libcrypto.so.0.9.8 \
+      $(PKG)/bin/STAFDefault.crt \
+      $(PKG)/bin/STAFDefault.key \
+      $(PKG)/bin/CAList.crt
+    endif
+    
+    Targets += $(Pkg_Targets) \
+               $(PKG_ROOT)/stafpkg_$(OS_NAME).tar
+    
+    CleanupTargets += Pkg_cleanup
+    
+    # Standard inference rule for copying files from REL tree to PKG tree
+    
+    $(PKG)/%: $(REL)/%
+    	$(COPY_FILE)
+    
+    # Special rule for Win32 for copying files from REL/lib tree to PKG/bin
+    
+    $(PKG)/bin/%: $(REL)/lib/%
+	    $(COPY_FILE)
+    
+    $(PKG_ROOT)/stafpkg_$(OS_NAME).tar: $(Pkg_Targets)
+    	@echo "*** Creating $(@F) ***"
+    	-@$(DEL) $@ $(OUT_ERR_TO_DEV_NULL)
+    	@cd $(PKG_ROOT); tar cf $@ *
+    
+    Pkg_cleanup:
+    	-@$(DEL) -Rf $(PKG) $(OUT_ERR_TO_DEV_NULL)
+
+
+d) Contents of new file: install/ia/ant/linux-ppc64le/build.xml:
+
+    <project name="STAF-InstallAnywhere-linux-ppc64le">
+    
+        <description>
+            Build file to build STAF InstallAnywhere for linux-ppc64le
+        </description>
+    
+        <taskdef name="buildinstaller"
+          classname="com.zerog.ia.integration.ant.InstallAnywhereAntTask"
+          classpath="C:\IA2013\resource\build\iaant.jar"
+        />
+
+        <buildinstaller
+          IALocation="C:\IA2013"
+          IAProjectFile="C:\IA2013\projects\STAF\STAF.iap_xml"
+          BuildLinuxWithVM="true"
+          LinuxVMPackLocation="C:\IA2013\resource\installer_vms\IA_ibm_linux_ppc64le_71sr2.vm"
+          BuildLinuxWithoutVM="true"
+          BuildWindowsWithVM="false"
+          BuildWindowsWithoutVM="false"
+          BuildAIXWithVM="false"
+          BuildAIXWithoutVM="false"
+          BuildSolarisWithVM="false"
+          BuildSolarisWithoutVM="false"
+          BuildHPUXWithVM="false"
+          BuildHPUXWithoutVM="false"
+          BuildMacOSXWithoutVM="false"
+        />
+    
+    </project>
+
+e) Contents of new file: install/ia/ant/linux-ppc64le/iabuild.xml:
+
+    <?xml version="1.0" encoding="UTF-8"?><build BuildAIXWithVM="false" BuildAIXWith
+    outVM="false" BuildHPUXWithVM="false" BuildHPUXWithoutVM="false" BuildLinuxWithV
+    M="true" BuildLinuxWithoutVM="true" BuildMacOSXNoVM="false" BuildSolarisWithVM="
+    false" BuildSolarisWithoutVM="false" BuildWindowsWithVM="false" BuildWindowsWith
+    outVM="false" LinuxVMpackLocation="C:\IA2013\resource\installer_vms\IA_ibm_linux
+    _ppc64le_71sr2.vm"/>
+
+f) Changes to documentaton:
+
+    Index: userguide/Overview.script
+    ===================================================================
+    RCS file: /cvsroot/staf/src/staf/docs/userguide/Overview.script,v
+    retrieving revision 1.42
+    diff -r1.42 Overview.script
+    57c57
+    < :li.Linux (i386, x86_64, PPC64)
+    ---
+    > :li.Linux (i386, x86_64, PPC64, PPC64LE)
+    Index: userbuide/Config.script
+    ===================================================================
+    RCS file: /cvsroot/staf/src/staf/docs/userguide/Config.script,v
+    retrieving revision 1.109
+    diff -r1.109 Config.script
+    100c100
+    < for z/OS).
+    ---
+    > for z/OS or Linux ppc64le).
+    104c104
+    < (except on z/OS where only a non-secure tcp interface is configured).
+    ---
+    > (except on z/OS and Linux ppc64le where only a non-secure tcp interface is configured).
+    186c186
+    < not available on z/OS where only non-secure TCP/IP is currently supported.
+    ---
+    > not available on z/OS or Linux ppc64le where only non-secure TCP/IP is currently supported.
+    317a318,319
+    > :li.Java 7.1 or newer is required by JSTAF provided in the STAF binaries for
+    > Linux ppc64le.
+    Index: faq/STAFFAQ.xml
+    ===================================================================
+    RCS file: /cvsroot/staf/src/staf/docs/faq/STAFFAQ.xml,v
+    retrieving revision 1.93
+    diff -r1.93 STAFFAQ.xml
+    62c62
+    < STAF 3.4.15+ is supported on the following operating systems:
+    ---
+    > STAF 3.4.21+ is supported on the following operating systems:
+    73c73
+    < <listitem>Linux (i386, x86_64, PPC64)</listitem>
+    ---
+    > <listitem>Linux (i386, x86_64, PPC64, PPC64LE)</listitem>
+    Index: installguide/STAFInstall.xml
+    ===================================================================
+    RCS file: /cvsroot/staf/src/staf/docs/installguide/STAFInstall.xml,v
+    retrieving revision 1.93
+    diff -r1.93 STAFInstall.xml
+    6c6
+    < February 18, 2015
+    ---
+    > March 2, 2015
+    330a331,348
+    > <entry>Linux PPC64 Little Endian (linux-ppc64le)</entry>
+    > <entry>
+    > <mediaobject>
+    > <imageobject><imagedata fileref="greencheck.gif" format="BMP"/></imageobject>
+    > </mediaobject>
+    > </entry>
+    > <entry>
+    > <mediaobject>
+    > <imageobject><imagedata fileref="greencheck.gif" format="BMP"/></imageobject>
+    > </mediaobject>
+    > </entry>
+    > <entry>
+    > <mediaobject>
+    > <imageobject><imagedata fileref="greencheck.gif" format="BMP"/></imageobject>
+    > </mediaobject>
+    > </entry>
+    > </row>
+    > <row>
+    808a827,836
+    > <entry>linux-ppc64le</entry>
+    > <entry>64-bit</entry>
+    > <entry>IA | IA_NoJVM | STAFInst</entry>
+    > <entry>STAF3xx-setup-linux-ppc64le.bin | STAF3xx-setup-linux-ppc64le-NoJVM.bin | STAF3xx-linux-ppc64le.tar.gz</entry>
+    > <entry>Linux</entry>
+    > <entry>3.13.11+</entry>
+    > <entry>ppc64le</entry>
+    > </row>
+    > <row>
+    > <entry>3.x.x</entry>
+    3745a3774,3810
+    > Linux PPC64 LE (Little Endian)
+    > </entry>
+    > <entry>
+    > <para>
+    > STAF34x-setup-linux-ppc64le.bin
+    > </para>
+    > <para>
+    > STAF34x-setup-linux-ppc64le-NoJVM.bin
+    > </para>
+    > <para>
+    > STAF34x-linux-ppc64le.tar.gz
+    > </para>
+    > </entry>
+    > <entry>
+    > <programlisting><![CDATA[
+    > Ubuntu 14.04.1 LTS, Trusty Tahr
+    > gcc version 4.8.2 (Ubuntu 4.8.2-19ubuntu1)
+    > Linux 3.13.0.32-generic  ppc64le ppc64le ppc64le GNU/Linux
+    > GNU C Library (Ubuntu EGLIBc 2.19-0ubuntu6.5) stable release version 2.19
+    > Compiled by GNU CC version 4.8.2.
+    > Compiled on a Linux 3.13.11 system on 2014-12-04.
+    > ]]></programlisting>
+    > </entry>
+    > <entry>
+    > <para>
+    > <ulink url="http://staf.sourceforge.net/oslibs/linux-ppc64le/libstdc++.so.6">
+    > libstdc++.so.6</ulink>.
+    > </para>
+    > <para>
+    > <ulink url="http://staf.sourceforge.net/oslibs/linux-ppc64le/libgcc_s.so.1">
+    > libgcc_s.so.1</ulink>.
+    > </para>
+    > </entry>
+    > </row>
+    >
+    > <row>
+    > <entry>
+    Index: developerguide/stafdg.html
+    ===================================================================
+    RCS file: /cvsroot/staf/src/staf/docs/developerguide/stafdg.html,v
+    retrieving revision 1.102
+    diff -r1.102 stafdg.html
+    27c27
+    < <p><st1:date Year="2014" Day="24" Month="09">November 6, 2014<p>Version 3.4.20</p>
+    ---
+    > <p><st1:date Year="2014" Day="24" Month="09">February 24, 2015<p>Version 3.4.21</p>
+    470a471
+    >         <li><tt>linux-ppc64le</tt></li>
+
+g) Changes to test/STAFTest.xml:
+
+    Index: STAFTest.xml
+    ===================================================================
+    RCS file: /cvsroot/staf/src/staf/test/STAFTest.xml,v
+    retrieving revision 1.364
+    diff -r1.364 STAFTest.xml
+    19964a19965,19980
+    >       <!-- Get the STAF/Config/OS/Revision for the STAX service machine
+    >            (used to determine if its a Linux ppc64le system so we know not
+    >            to run OpenSSL tests on it) -->
+    >       <stafcmd>
+    >         <location>'local'</location>
+    >         <service>'var'</service>
+    >         <request>'resolve string {STAF/Config/OS/Revision}'</request>
+    >       </stafcmd>
+    > 
+    >       <script>failMessage = 'Obtaining {STAF/Config/OS/Revision}'</script>
+    >       <call function="'check-stafcmd'"/>
+    > 
+    >       <script>
+    >         STAXMachOSRevision = STAFResult
+    >       </script>      
+    >       
+    20005,20008c20021,20024
+    <       <!-- SSL Support is not provided for z/OS or for Windows IA64.  Since the CHECKSUM option
+    <             on a FS QUERY ENTRY request requires SSL to get the checksum, don't run the checksum
+    <             tests if the STAX machine is z/OS or Windows IA64. -->
+    < 
+    ---
+    >       <!-- STAF SSL Support is not provided for z/OS, Linux ppc64le, or Windows
+    >            IA64.  Since the CHECKSUM option on a FS QUERY ENTRY request requires
+    >            SSL to get the checksum, don't run the checksum tests if the STAX
+    >            machine is one of these operating systems. -->
+    20010a20027
+    >             (STAXMachOSType.find('Linux') == 0 and STAXMachOSRevision == 'ppc64le') or
+    20069c20086,20087
+    <             ' STRING {STAF/Config/OS/MajorVersion} STRING {STAF/Config/OS/MinorVersion}'
+    ---
+    >             ' STRING {STAF/Config/OS/MajorVersion} STRING {STAF/Config/OS/MinorVersion}' + \
+    >             ' STRING {STAF/Config/OS/Revision}
+    20106a20125,20127
+    >        
+    >         if resolvedVarList[7]['rc'] == '0':
+    >           TestMachOSRevision = resolvedVarList[7]['result']          
+    20180,20183c20201,20204
+    <       <!-- SSL Support is not provided for z/OS or for Windows IA64.  Since the CHECKSUM option
+    <             on a FS QUERY ENTRY request requires SSL to get the checksum, don't run the checksum
+    <             tests if the test machine is z/OS or Windows IA64. -->
+    < 
+    ---
+    >       <!-- STAF SSL Support is not provided for z/OS, Linux ppc64le, or Windows
+    >            IA64.  Since the CHECKSUM option on a FS QUERY ENTRY request requires
+    >            SSL to get the checksum, don't run the checksum tests if the test
+    >            machine is one of these operating systems. -->
+    20185a20207
+    >             (TestMachOSType.find('Linux') == 0 and TestMachOSRevision == 'ppc64le') or
+
+
+h) Changes to autobuild/BuildSTAF.xml and autobuild/BuildIA.xml so we
+   can build STAF for Linux ppc64le automatically:
+
+    Index: BuildIA.xml
+    ===================================================================
+    RCS file: /cvsroot/staf/src/staf/autobuild/BuildIA.xml,v
+    retrieving revision 1.8
+    diff -r1.8 BuildIA.xml
+    165c165
+    <         <elseif expr="platform == 'linux' or platform == 'linux-ia64' or platform == 'linux-amd64' or platform == 'linux-ppc64-32' or platform == 'linux-ppc64-64' or platform == 'zlinux-32' or platform == 'zlinux-64'">
+    ---
+    >         <elseif expr="platform == 'linux' or platform == 'linux-ia64' or platform == 'linux-amd64' or platform == 'linux-ppc64-32' or platform == 'linux-ppc64-64' or platform == 'linux-ppc64le' or platform == 'zlinux-32' or platform == 'zlinux-64'">
+
+    Index: BuildSTAF.xml
+    ===================================================================
+    RCS file: /cvsroot/staf/src/staf/autobuild/BuildSTAF.xml,v
+    retrieving revision 1.97
+    diff -r1.97 BuildSTAF.xml
+    46c46
+    <     ssl_unsupported_platform_list = [ 'zos', 'zos64', 'win64' ]
+    ---
+    >     ssl_unsupported_platform_list = [ 'zos', 'zos64', 'win64', 'linux-ppc64le' ]
+    335a336,368
+    >        # linux-ppc64le (Linux PPC64 Little Endian)
+    >        {
+    >          'platform_name'      : 'linux-ppc64le',
+    >          'platform_semaphore' : 'linux-ppc64le',
+    >          'build_machine'      : '9.114.117.104',
+    >          'build_root'         : '/opt',
+    >          'project_list'       : [
+    >                                   'staf', 'connprov_tcp', 'connprov_localipc',
+    >                                   'zip', 'java', 'ant', 'demo'
+    >                                 ],
+    >          'make'               : 'make',
+    >          'path_sep'           : ':',
+    >          'bash_shell'         : 'bash',
+    >          'java_v12_root'      : '/opt/ibm-java-ppc64le-71',
+    >          'java_v12_bin_dir'   : '/opt/ibm-java-ppc64le-71/bin',
+    >          'ismp_exe_suffix'    : '.bin',
+    >          'build_ismp_files'   : '0',
+    >          'build_ia_files'     : '1',
+    >          'ia_platform'        : 'linux',
+    >          'test_using'         : 'IA',
+    >          'build_osname'       : 'linux-ppc64le',
+    >          'architecture'       : '64-bit',
+    >          'osname'             : 'Linux',
+    >          'osversion'          : '3.13.0+',
+    >          'osarch'             : 'ppc64le',
+    >          'test_machine_list'  : [
+    >            { 'targetMachine'    : '9.114.117.104',
+    >              'targetInstallDir' : '/opt/STAF_autoTest',
+    >              'installFileSuffix': '.bin', # Must be .exe, .bin, or .tar.gz
+    >              'javaBinDir'       : '/opt/ibm-java-ppc64le-71/bin'
+    >            } ]
+    >        },
+    >
+    1226c1259
+    <                                   'solaris-x86', 'zos',
+    ---
+    >                                   'solaris-x86', 'zos', 'linux-ppc64le',
+    1232a1266
+    >           02/16/2015: Added linux-ppc64le
+    1545c1579
+    <                         unix = ['aix','aix64','aix433','linux', 'linux-ppc64-32', 'linux-ppc64-64', 'linux-amd64', 'solaris' , 'solaris-sparc64' , 'solaris-x86', 'solaris-x64', 'solaris-x64-64', 'hpux', 'hpux-parisc64', 'hpux-ia64-32', 'hpux-ia64-64', 'zlinux-32', 'zlinux-64', 'freebsd',  'macosx-i386', 'macosx-ppc', 'macosx-universal', 'zos', 'zos64']
+    ---
+    >                         unix = ['aix','aix64','aix433','linux', 'linux-ppc64-32', 'linux-ppc64-64', 'linux-ppc64le', 'linux-amd64', 'solaris' , 'solaris-sparc64' , 'solaris-x86', 'solaris-x64', 'solaris-x64-64', 'hpux', 'hpux-parisc64', 'hpux-ia64-32', 'hpux-ia64-64', 'zlinux-32', 'zlinux-64', 'freebsd',  'macosx-i386', 'macosx-ppc', 'macosx-universal', 'zos', 'zos64']
+    4225c4259
+    <             <else> <!--  <if expr="platform_name == 'solaris' or platform_name == 'solaris-x86' or platform_name == 'solaris-x64' or platform_name == 'solaris-x64-64' or platform_name == 'solaris-sparc64' or platform_name == 'hpux' or platform_name == 'hpux-parisc64' or platform_name == 'aix' or platform_name == 'aix64' or platform_name == 'linux-ppc64-32' or platform_name == 'linux-ppc64-64' or platform_name == 'linux-amd64' or platform_name == 'hpux-ia64-32' or platform_name == 'hpux-ia64-64' or platform_name == 'win64' or platform_name == 'winamd64' or platform_name == 'zlinux-32' or platform_name == 'zlinux-64' or platform_name == 'freebsd' or platform_name == 'macosx-i386' or platform_name == 'macosx-ppc' or platform_name == 'macosx-universal' or platform_name == 'zos' or platform_name == 'zos64'"> -->
+    ---
+    >             <else> <!--  <if expr="platform_name == 'solaris' or platform_name == 'solaris-x86' or platform_name == 'solaris-x64' or platform_name == 'solaris-x64-64' or platform_name == 'solaris-sparc64' or platform_name == 'hpux' or platform_name == 'hpux-parisc64' or platform_name == 'aix' or platform_name == 'aix64' or platform_name == 'linux-ppc64-32' or platform_name == 'linux-ppc64-64' or platform_name == 'linux-ppc64le' or platform_name == 'linux-amd64' or platform_name == 'hpux-ia64-32' or platform_name == 'hpux-ia64-64' or platform_name == 'win64' or platform_name == 'winamd64' or platform_name == 'zlinux-32' or platform_name == 'zlinux-64' or platform_name == 'freebsd' or platform_name == 'macosx-i386' or platform_name == 'macosx-ppc' or platform_name == 'macosx-universal' or platform_name == 'zos' or platform_name == 'zos64'"> -->
+    4811a4846,4870
+    >         <elseif expr="platform_name == 'linux-ppc64le'">
+    >           <script>
+    >                 objDir = '/opt/dev/autobuild/build/obj/linux-ppc64le/staf/%s' % (buildType)
+    >                 relDir = '/opt/dev/autobuild/build/rel/linux-ppc64le/staf/%s' % (buildType)
+    >                 STAFlib = 'libSTAF.so'
+    >                 STAFTCPlib = 'libSTAFTCP.so'
+    >                 RebuildFiles = [
+    >                     '%s/connproviders/tcp/STAFTCPConnProvider.d' % objDir,
+    >                     '%s/connproviders/tcp/STAFTCPConnProvider.o' % objDir,
+    >                     '%s/lib/%s' % (relDir, STAFTCPlib),
+    >                     '%s/stafif/STAFSocket.d' % objDir,
+    >                     '%s/stafif/STAFSocket.o' % objDir,
+    >                     '%s/lib/%s' % (relDir, STAFlib)
+    >                    ]
+    >                 ipv6BuildMachine = build_machine
+    >                 envs = [
+    >                     'Path=%s%s{STAF/Env/Path}' % (cygwinBinPath, path_sep),
+    >                     'BUILD_TYPE=%s' % buildType,
+    >                     'OS_NAME=%s' % build_osname,
+    >                     'STAF_USE_SSL=%s' % staf_use_ssl,
+    >                     'OPENSSL_ROOT=%s' % openssl_root,
+    >                     'STAF_USE_IPV6=1'
+    >                 ]
+    >           </script>
+    >         </elseif>
+
+i) Changes to STAF web pages to download the STAF installer files for
+   Linux ppc64le:
+
+    Index: getcurrent.php
+    ===================================================================
+    RCS file: /cvsroot/staf/src/staf/webpages/sf/getcurrent.php,v
+    retrieving revision 1.141
+    diff -r1.141 getcurrent.php
+    219a220,243
+    > <tr>
+    >   <td>Linux (PPC64LE)</td>
+    >   <td>64-bit</td>
+    >   <td>3.4.20</td>
+    >   <td><a href="http://prdownloads.sourceforge.net/staf/STAF3420-setup-linux-ppc64le.bin?download">STAF3420-setup-linux-ppc64le.bin</a></td>
+    >   <td>InstallAnywhere (Bundled JVM)</td>
+    >   <td>95M</td>
+    > </tr>
+    > <tr>
+    >   <td>Linux (PPC64LE)</td>
+    >   <td>64-bit</td>
+    >   <td>3.4.20</td>
+    >   <td><a href="http://prdownloads.sourceforge.net/staf/STAF3420-setup-linux-ppc64le-NoJVM.bin?download">STAF3420-setup-linux-ppc64le-NoJVM.bin</a></td>
+    >   <td>InstallAnywhere (No JVM)</td>
+    >   <td>26M</td>
+    > </tr>
+    > <tr>
+    >   <td>Linux (PPC64LE)</td>
+    >   <td>64-bit</td>
+    >   <td>3.4.20</td>
+    >   <td><a href="http://prdownloads.sourceforge.net/staf/STAF3420-linux-ppc64le.tar.gz?download">STAF3420-linux-ppc64le.tar.gz</a></td>
+    >   <td>GNU zipped tar</td>
+    >   <td>7.2M</td>
+    > </tr>
+    Index: latest.xml
+    ===================================================================
+    RCS file: /cvsroot/staf/src/staf/webpages/sf/latest.xml,v
+    retrieving revision 1.35
+    diff -r1.35 latest.xml
+    17,18c17,18
+    <       "linux-ppc64-32", "linux-ppc64-64", "zlinux-32", "zlinux-64",
+    <       "zlinux-sles9-32", "zlinux-sles9-64",
+    ---
+    >       "linux-ppc64-32", "linux-ppc64-64", "linux-ppc64le",
+    >       "zlinux-32", "zlinux-64", "zlinux-sles9-32", "zlinux-sles9-64",
+    82a83,88
+    >   <latest product="staf" platform="linux-ppc64le" version="3.4.20">
+    >     <file name="STAF3420-setup-linux-ppc64le.bin" installer="IA"/>
+    >     <file name="STAF3420-setup-linux-ppc64le-NoJVM.bin" installer="IA_NoJVM"/>
+    >     <file name="STAF3420-linux-ppc64le.tar.gz" installer="STAFInst"/>
+    >   </latest>
+    >
+
+j) Updated STAX's STAFUpgradUtil.xml to support Linux ppc64le:
+
+Index: services/stax/libraries/STAFUpgradeUtil.xml
+===================================================================
+RCS file: /cvsroot/staf/src/staf/services/stax/libraries/STAFUpgradeUtil.xml,v
+retrieving revision 1.29
+diff -r1.29 STAFUpgradeUtil.xml
+4043c4043
+<             # Linux PPC64
+---
+>             # Linux PPC64 (Big Endian)
+4070a4071,4083
+>           elif machineInfo['osRevision'] == 'ppc64le':
+>             # Linux PPC64 LE (Little Endian)
+>             if preferredFileType == 1:
+>               # Choose InstallAnywhere file over tar file
+>               patternList = [
+>                 { 'type': 1, 'name': 'STAF*-setup-linux-ppc64le', 'ext': 'bin' },
+>                 { 'type': 2, 'name': 'STAF*-linux-ppc64le.tar', 'ext': 'gz' } ]
+>             else:
+>               # Choose tar file over InstallAnywhere file
+>               patternList = [
+>                 { 'type': 2, 'name': 'STAF*-linux-ppc64le.tar', 'ext': 'gz' },
+>                 { 'type': 1, 'name': 'STAF*-setup-linux-ppc64le', 'ext': 'bin' } ]
+>                   
+
+
+Backward Compatibility Issues
+-----------------------------
+
+None
